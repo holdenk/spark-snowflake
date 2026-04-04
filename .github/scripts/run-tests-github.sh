@@ -26,11 +26,30 @@ if [ "$SNOWFLAKE_TEST_ACCOUNT" == "aws" -a "$SPARK_CONN_ENV_USE_COPY_UNLOAD" == 
   export EXTRA_TEST_FOR_COVERAGE=true
 fi
 
+# Check whether Snowflake credentials are available (decrypted config file exists).
+# If not, we can still run unit tests but must skip integration tests.
+SNOWFLAKE_CONFIG_AVAILABLE=false
+if [ -f "snowflake.travis.json" ]; then
+  SNOWFLAKE_CONFIG_AVAILABLE=true
+fi
+
 if [ "$INTEGRATION_TESTS" != "true" ]; then
-  # Run only test
+  # Run only unit tests — no credentials needed
   # Use ++! to force Scala version even when crossScalaVersions is empty (Spark 4.x)
   sbt -DsparkVersion=$SPARK_VERSION "++$SPARK_SCALA_VERSION!" clean coverage test coverageReport
-else
-  # Run both test and it
+elif [ "$SNOWFLAKE_CONFIG_AVAILABLE" = "true" ]; then
+  # Run both unit tests and integration tests
   sbt -DsparkVersion=$SPARK_VERSION "++$SPARK_SCALA_VERSION!" clean coverage test it:test coverageReport
+else
+  # Credentials not available — run unit tests only, then flag ITs as skipped.
+  echo "============================================================"
+  echo "WARNING: Snowflake credentials not available."
+  echo "         Running unit tests ONLY."
+  echo "         Integration tests are SKIPPED — do NOT treat this as a full green build."
+  echo "============================================================"
+  sbt -DsparkVersion=$SPARK_VERSION "++$SPARK_SCALA_VERSION!" clean coverage test coverageReport
+
+  # Exit with a distinct code so the workflow can mark this as incomplete.
+  # We use an output file rather than a non-zero exit (which would fail the step).
+  echo "INTEGRATION_TESTS_SKIPPED=true" >> "$GITHUB_OUTPUT" 2>/dev/null || true
 fi
