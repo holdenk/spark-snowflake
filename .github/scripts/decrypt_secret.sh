@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+set +e
 
 # Below is encrypt command. It needs to input passphrase in promot.
 # gpg --symmetric --cipher-algo AES256 snowflake.travis.json
@@ -14,8 +15,10 @@ if [ -z "$SNOWFLAKE_TEST_CONFIG_SECRET" ]; then
 fi
 
 # --batch to prevent interactive command --yes to assume "yes" for questions
-if ! gpg --quiet --batch --yes --decrypt --passphrase="$SNOWFLAKE_TEST_CONFIG_SECRET" --output $1 $2; then
-  echo "WARNING: Failed to decrypt Snowflake test config. Skipping decryption."
+gpg --quiet --batch --yes --decrypt --passphrase="$SNOWFLAKE_TEST_CONFIG_SECRET" --output $1 $2
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "WARNING: Failed to decrypt Snowflake test config (gpg exit code $rc). Skipping."
   echo "         Integration tests will be skipped. Unit tests will still run."
   exit 0
 fi
